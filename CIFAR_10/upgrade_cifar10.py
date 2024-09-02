@@ -6,6 +6,18 @@ from torch.utils.data import DataLoader
 from customDataLoader import CIFAR_DataLoader, custom_transform
 from utils import ModelTrainer, load_train_cifar_data, load_test_cifar_data
 import torch.optim as optim
+import wandb
+
+wandb.init(
+    project="CIFAR10_upgrade",
+    config={
+        "learning_rate": 0.1,
+        "architecture": "ResNet",
+        "dataset": "CIFAR-10",
+        "epochs": 10,
+    },
+)
+wandb.run.name = "CIFAR_10 upgrade"
 
 
 class basicBlock(nn.Module):
@@ -223,9 +235,13 @@ if __name__ == "__main__":
     trainer = ModelTrainer(model, classes, device)
 
     # 모델 훈련 및 평가
-    trainer.train(train_loader, optimizer, log_interval=200, epoch=1)
-    test_loss, test_accuracy = trainer.evaluate(test_loader)
+    for i in range(1, 11):
+        train = trainer.train(train_loader, optimizer, log_interval=200)
+        test_loss, test_accuracy = trainer.evaluate(test_loader)
 
+    wandb.log(
+        {"train loss": train, "test loss": test_loss, "test accuracy": test_accuracy}
+    )
     # 정확도 출력
     print(f"Test Loss: {test_loss:.4f}, Test Accuracy: {test_accuracy:.2f}%")
 

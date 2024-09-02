@@ -26,8 +26,8 @@ class ModelTrainer:
         axes = axes.flatten()
 
         for img, label, pred, ax in zip(images, labels, predictions, axes):
-            img = img / 2 + (0.5).clip(0, 1)  # 정규화된 이미지를 원래 범위로 변환
-            npimg = img.numpy().transpose((1, 2, 0))
+            img = img / 2 + 0.5  # 정규화된 이미지를 원래 범위로 변환
+            npimg = np.clip(img.numpy().transpose((1, 2, 0)), 0, 1)
             ax.imshow(npimg)
             ax.set_title(
                 f"True: {self.classes[label]} \n Pred: {self.classes[pred]}",
@@ -37,56 +37,69 @@ class ModelTrainer:
         plt.tight_layout()
         plt.close()
 
-    def train(self, train_data, optimizer, log_interval, epoch):
-        self.model.train()
-        for batch_idx, (images, labels) in enumerate(train_data):
-            images, labels = images.to(self.device), labels.to(self.device)
-            optimizer.zero_grad()
-            output = self.model(images)
-            loss = self.criterion(output, labels)
-            loss.backward()
-            optimizer.step()
 
-            if batch_idx % log_interval == 0:
-                print(f"[Epoch {epoch}] [Train Loss: {loss.item():.4f}]")
+def train(net, train_loader, optimizer, criterion, device, epoch):
+    print("\n[ Train epoch: %d ]" % epoch)
+    net.train()
+    train_loss, correct, total = 0, 0, 0
 
-    def evaluate(self, test_loader):
-        self.model.eval()
-        test_loss = 0.0
-        correct = 0
-        total = 0
-        images_to_show = []
-        labels_to_show = []
-        predictions_to_show = []
+    for batch_idx, (inputs, targets) in enumerate(train_loader):
+        inputs, targets = inputs.to(device), targets.to(device)
+        optimizer.zero_grad()
 
-        with torch.no_grad():
-            for images, labels in test_loader:
-                images, labels = images.to(self.device), labels.to(self.device)
-                output = self.model(images)
-                batch_loss = self.criterion(output, labels)  # 현재 배치의 손실
-                test_loss += batch_loss.item() * labels.size(0)  # 배치 크기로 가중 평균
-                _, prediction = output.max(1)  # 예측 결과 인덱스
-                correct += prediction.eq(labels).sum().item()
-                total += labels.size(0)
+        outputs = net(inputs)
+        loss = criterion(outputs, targets)
+        loss.backward()
+        optimizer.step()
 
-                if len(images_to_show) < 10:
-                    images_to_show.extend(images.cpu().numpy())
-                    labels_to_show.extend(labels.cpu().numpy())
-                    predictions_to_show.extend(prediction.cpu().numpy().flatten())
+        train_loss += loss.item()
+        _, predicted = outputs.max(1)
+        total += targets.size(0)
+        correct += predicted.eq(targets).sum().item()
 
-                if len(images_to_show) >= 10:
-                    break
+        if batch_idx % 100 == 0:
+            print(
+                f"\nBatch {batch_idx} Accuracy {correct / total:.4f}, Loss {train_loss / total:.4f}"
+            )
 
-        test_loss /= total
-        test_accuracy = 100.0 * correct / total
+    train_accuracy = correct / total
+    train_loss = train_loss / total
+    grad_norm = sum(p.grad.data.norm(2).item() for p in net.parameters())
+    print(
+        f"\nTrain Epoch {epoch} Accuracy {train_accuracy:.4f}, Loss {train_loss:.4f}, grad_norm {grad_norm}"
+    )
 
-        images_to_show = np.array(images_to_show)[:10]
-        labels_to_show = np.array(labels_to_show)[:10]
-        predictions_to_show = np.array(predictions_to_show)[:10]
 
-        self.imshow(torch.tensor(images_to_show), labels_to_show, predictions_to_show)
+def test(net, test_loader, criterion, device, epoch, file_name):
+    print(f"\n[ Test epoch: %d]" % epoch)
+    net.eval()
+    test_loss, correct, total = 0, 0, 0
 
-        return test_loss, test_accuracy
+    with torch.no_grad():
+        for inputs, targets in test_loader:
+            inputs, targets = inputs.to(device), targets.to(device)
+            outputs = net(inputs)
+            test_loss += criterion(outputs, targets).item()
+            _, predicted = outputs.max(1)
+            total += targets.size(0)
+            correct += predicted.eq(targets).sum().item()
+
+    test_accuracy = correct / total
+    test_loss = test_loss / total
+    print(f"\nTest Epoch {epoch}: Accuracy {test_accuracy:.4f}, Loss {test_loss:.4f}")
+
+    if not os.path.isdir("checkpoint"):
+        os.mkdir("checkpoint")
+    torch.save({"net": net.state_dict()}, f"./checkpoint/{file_name}")
+    print("Model Saved")
+
+    return test_loss
+
+
+def adjust_learning_rate(optimizer, learning_rate, epoch):
+    lr = learning_rate * (0.1 ** (epoch // 50))
+    for param_group in optimizer.param_groups:
+        param_group["lr"] = lr
 
 
 def load_train_cifar_data(cifar_dir, batch_range):
