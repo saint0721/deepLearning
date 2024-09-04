@@ -1,4 +1,3 @@
-import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
@@ -8,7 +7,7 @@ class BasicBlock(nn.Module):
         # in_planes: input planes
         super(BasicBlock, self).__init__()
 
-        # 합성곱 레이어
+        # 1 번째 합성곱 레이어
         self.conv1 = nn.Conv2d(
             in_channels,
             out_channels,
@@ -19,14 +18,14 @@ class BasicBlock(nn.Module):
         )
         self.bn1 = nn.BatchNorm2d(out_channels)  # 배치 정규화
         self.relu = nn.ReLU(inplace=True)  # 활성화 함수
-        self.conv2 = nn.Conv2d(
+        self.conv2 = nn.Conv2d(  # 2 번째 합성곱 레이어
             out_channels, out_channels, kernel_size=3, padding=1, bias=False
         )
         self.bn2 = nn.BatchNorm2d(out_channels)
 
         # Shortcut 경로 초기화
         self.shortcut = nn.Sequential()
-        # Shortcut 경로에서 크기나 채널 수를 맞춰야 하는 경우
+        # Shortcut(Skip connection)
         if stride != 1 or in_channels != out_channels:
             self.shortcut = nn.Sequential(
                 nn.Conv2d(
@@ -36,9 +35,11 @@ class BasicBlock(nn.Module):
             )
 
     def forward(self, x):
-        out = self.relu(self.bn1(self.conv1(x)))  # 첫 번째 합성곱, 배치 정규화, ReLU
-        out = self.bn2(self.conv2(out))  # 두 번째 합성곱, 배치 정규화
-        # Shortcut + 합성곱 결과
+        out = self.relu(
+            self.bn1(self.conv1(x))
+        )  # 첫 번째 합성곱 -> 배치 정규화 -> ReLU
+        out = self.bn2(self.conv2(out))  # 두 번째 합성곱 -> 배치 정규화
+        # skip connection + x = F(x) + x
         out += self.shortcut(x)
         out = self.relu(out)  # 최종 ReLU 적용
         return out

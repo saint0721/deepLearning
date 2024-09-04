@@ -2,12 +2,13 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-import os
-import time
-import wandb
 from customDataLoader import CIFAR_DataLoader, custom_transform
 from ResNet import ResNet18
 from utils import load_train_cifar_data, load_test_cifar_data
+import os
+import time
+import wandb
+
 
 # wandb 초기화
 wandb.init(
@@ -62,7 +63,7 @@ early_stop_counter = 0
 start_time = time.time()
 
 
-# 학습률 조정
+# 학습률 조정 (스케줄러-Scheduler?)
 def adjust_learning_rate(optimizer, epoch):
     lr = learning_rate * (0.1 ** (epoch // 50))
     for param_group in optimizer.param_groups:
