@@ -1,17 +1,25 @@
+# 무시할 파일 및 폴더 목록
 wandb
-__pycache__/dataloader.cpython-310.pyc
-*/__pycache__/*
-CIFAR_10/__pycache__/*
-CIFAR_10/cifar-10-batches-py/*
-data/*
-TorchLesson/data/*
-*/.DS_Store
-*.pth
-cifar-10-batches-py/data_batch_1
-cifar-10-batches-py/data_batch_2
-cifar-10-batches-py/data_batch_3
-cifar-10-batches-py/data_batch_4
-cifar-10-batches-py/data_batch_5
-cifar-10-batches-py/test_batch
-cifar-10-batches-py/batches.meta
 __pycache__/
+*.pyc
+
+# 데이터 폴더
+data/
+TorchLesson/data/
+
+# 시스템 파일
+*.DS_Store
+
+# PyTorch 모델 파일
+*.pth
+
+# CIFAR-10 특정 파일 무시
+cifar-10-batches-py/
+*.jpg
+
+# 가상환경 폴더 및 기타 불필요한 폴더
+lib/
+bin/
+bin/pip3
+pyvenv.cfg
+lib64
