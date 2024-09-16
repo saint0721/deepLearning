@@ -23,3 +23,5 @@ bin/
 bin/pip3
 pyvenv.cfg
 lib64
+*/dataverser_files/
+skin-cancer-prediction/dataverse_files/
