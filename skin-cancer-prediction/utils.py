@@ -1,7 +1,6 @@
 # 파이썬 라이브러리
-import pandas as pd
 import numpy as np
-import os, cv2
+import cv2
 from tqdm import tqdm
 
 # 파이토치 라이브러리

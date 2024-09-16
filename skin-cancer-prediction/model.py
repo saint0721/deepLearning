@@ -1,5 +1,5 @@
 import torch
-from torchvision import models, efficientnet_B7_Weights, DenseNet121_Weights
+from torchvision import models
 from torch import nn
 from ResNet import ResNet50
 
@@ -38,14 +38,14 @@ def initialize_model(model_name, num_classes, feature_extract, use_pretrained=Tr
         input_size = 224
         
     elif model_name == 'EfficientNet':
-        model_ft = models.efficientnet_b7(weights=efficientnet_B7_Weights)
+        model_ft = models.efficientnet_b7(pretrained=use_pretrained)
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier[1].in_features
         model_ft.classifier[1] = nn.Linear(num_ftrs, num_classes)
         input_size = 224
 
-    elif model_name == "densenet":
-        model_ft = models.densenet121(weights=DenseNet121_Weights)
+    elif model_name == "DenseNet":
+        model_ft = models.densenet121(pretrained=use_pretrained)
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier.in_features
         model_ft.classifier = nn.Linear(num_ftrs, num_classes)

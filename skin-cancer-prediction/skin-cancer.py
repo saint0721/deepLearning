@@ -13,7 +13,7 @@ from torch.utils.data import DataLoader
 from customDataLoader import CustomDataset
 from get_data import get_data
 from utils import compute_mean_stdev, AverageMeter
-from model import initialize_model, set_parameter_requires_grad
+from model import initialize_model
 import wandb
 
 
@@ -27,7 +27,7 @@ wandb.init(
         "epochs": 10,
     },
 )
-wandb.run.name = "ResNet inference"
+wandb.run.name = "ResNet50 inference"
 
 # Device & 모델 설정 
 model_name = 'ResNet'
@@ -50,7 +50,7 @@ optimizer = optim.Adam(model.parameters(), lr=1e-3)
 criterion = nn.CrossEntropyLoss().to(device)
 
 # 폴더 지정 & 데이터로더 설정
-data_dir ="/home/students/cs/202121165/deep_learning/skin-cancer-prediction/data"
+data_dir ="/home/work/bachelor/deep_learning/skin-cancer-prediction/dataverse_files"
 all_image_path = glob(os.path.join(data_dir, "*", "*.jpg"))
 imageid_path_dict = {os.path.splitext(os.path.basename(x))[0]: x for x in all_image_path}
 print(f"이미지: {len(all_image_path)}장")
@@ -79,8 +79,8 @@ val_transform = T.Compose([
 train_dataset = CustomDataset(df_train, transform=train_transform)
 val_dataset = CustomDataset(df_val, transform=val_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True)
-val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False)
+train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
+val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
 
 
 total_loss_train, total_acc_train = [], []
@@ -153,11 +153,10 @@ def validate(val_loader, model, criterion, optimizer, epoch):
 
     wandb.log(
         {
-            "validation accuracy": val_loss.avg,
-            "validation loss": val_acc.avg,
+            "validation accuracy": val_acc.avg,
+            "validation loss": val_loss.avg,
         }
     )
-
     return val_loss.avg, val_acc.avg
 
 epoch = 10
