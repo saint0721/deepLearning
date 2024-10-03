@@ -22,15 +22,15 @@ wandb.init(
     project="HAM10000",
     config={
         "learning_rate": 1e-3,
-        "architecture": "ResNet",
+        "architecture": "EfficientNet",
         "dataset": "HAM10000",
         "epochs": 10,
     },
 )
-wandb.run.name = "ResNet50 inference"
+wandb.run.name = "EfficientNet-B7 inference"
 
 # Device & 모델 설정 
-model_name = 'ResNet'
+model_name = 'EfficientNet'
 print(f"start: {model_name}")
 
 classes = 7
@@ -40,7 +40,7 @@ device = "cuda" if torch.cuda.is_available() else "cpu"
 model = model_ft.to(device)
 
 # 모델 불러오기
-file_name = "ResNet.pth"
+file_name = "efficientnet.pth"
 if os.path.isfile(f"./checkpoint/{file_name}"):
     checkpoint = torch.load(f"./checkpoint/{file_name}")
     model.load_state_dict(checkpoint["net"]) 
@@ -79,8 +79,8 @@ val_transform = T.Compose([
 train_dataset = CustomDataset(df_train, transform=train_transform)
 val_dataset = CustomDataset(df_val, transform=val_transform)
 
-train_loader = DataLoader(train_dataset, batch_size=32, shuffle=True, num_workers=4)
-val_loader = DataLoader(val_dataset, batch_size=32, shuffle=False, num_workers=4)
+train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
+val_loader = DataLoader(val_dataset, batch_size=16, shuffle=False)
 
 
 total_loss_train, total_acc_train = [], []

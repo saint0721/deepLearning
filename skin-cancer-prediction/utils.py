@@ -1,12 +1,8 @@
 # 파이썬 라이브러리
+import pandas as pd
 import numpy as np
-import cv2
+import os, cv2
 from tqdm import tqdm
-
-# 파이토치 라이브러리
-import torch
-import torch.nn as nn
-
 
 def compute_mean_stdev(image_paths):
     img_h, img_w = 224, 224
@@ -35,7 +31,7 @@ def compute_mean_stdev(image_paths):
     print(f"NormMean: {means}")
     print(f"normStdev: {stdevs}")
     return means, stdevs
-
+        
 class AverageMeter(object):
     def __init__(self):
         self.reset()
