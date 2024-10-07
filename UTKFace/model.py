@@ -1,7 +1,7 @@
 import torch
 from torchvision import models
 from torch import nn
-from ResNet import ResNet50
+from ResNet import ResNet50, ResNet101, ResNet152
 
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
@@ -13,14 +13,11 @@ def initialize_model(model_name, task_type, feature_extract, use_pretrained=True
     input_size = 0
     
     if model_name == "ResNet":
-        model_ft = models.resnet50(pretrained=use_pretrained)
+        num_classes = 1 if task_type == 'regression' else 2
+        model_ft = ResNet50(num_classes=num_classes)
         set_parameter_requires_grad(model_ft, feature_extract)
-        num_ftrs = model_ft.fc.in_features
-        # 출력 크기 설정 (나이 예측은 1, 성별 예측은 2)
-        if task_type == "regression":
-            model_ft.fc = nn.Linear(num_ftrs, 1)  # 나이 예측 (회귀) -> 출력 크기 1
-        elif task_type == "classification":
-            model_ft.fc = nn.Linear(num_ftrs, 2)  # 성별 예측 (이진 분류) -> 출력 크기 2
+        num_ftrs = model_ft.linear.in_features
+        model_ft.linear = nn.Linear(num_ftrs, num_classes)
         input_size = 200
         
     elif model_name == 'EfficientNet':
@@ -28,9 +25,9 @@ def initialize_model(model_name, task_type, feature_extract, use_pretrained=True
         set_parameter_requires_grad(model_ft, feature_extract)
         num_ftrs = model_ft.classifier[1].in_features
         if task_type == "regression":
-            model_ft.classifier[1] = nn.Linear(num_ftrs, 1)  # 나이 예측 (회귀) -> 출력 크기 1
+            model_ft.classifier = nn.Linear(num_ftrs, 1)  # 나이 예측 (회귀) -> 출력 크기 1
         elif task_type == "classification":
-            model_ft.classifier[1] = nn.Linear(num_ftrs, 2)  # 성별 예측 (이진 분류) -> 출력 크기 2
+            model_ft.classifier = nn.Linear(num_ftrs, 2)  # 성별 예측 (이진 분류) -> 출력 크기 2
         input_size = 200
 
     elif model_name == "DenseNet":
@@ -41,16 +38,6 @@ def initialize_model(model_name, task_type, feature_extract, use_pretrained=True
             model_ft.classifier = nn.Linear(num_ftrs, 1)  # 나이 예측 (회귀) -> 출력 크기 1
         elif task_type == "classification":
             model_ft.classifier = nn.Linear(num_ftrs, 2)  # 성별 예측 (이진 분류) -> 출력 크기 2
-        input_size = 200
-        
-    elif model_name == 'SimpleCNN':
-        model_ft = SimpleCNN()
-        set_parameter_requires_grad(model_ft, feature_extract)
-        num_ftrs = model_ft.fc2.in_features
-        if task_type == "regression":
-            model_ft.fc2 = nn.Linear(num_ftrs, 1)  # 나이 예측 (회귀) -> 출력 크기 1
-        elif task_type == "classification":
-            model_ft.fc2 = nn.Linear(num_ftrs, 2)  # 성별 예측 (이진 분류) -> 출력 크기 2
         input_size = 200
     
     else:
