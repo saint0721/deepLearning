@@ -113,15 +113,15 @@ val_transform = T.Compose([
 train_dataset_age = CustomDataset(x_train_age, y_train_age, transform=train_transform)
 val_dataset_age = CustomDataset(x_test_age, y_test_age, transform=val_transform)
 
-train_loader_age = DataLoader(train_dataset_age, batch_size=16, shuffle=True)
-val_loader_age = DataLoader(val_dataset_age, batch_size=16, shuffle=False)
+train_loader_age = DataLoader(train_dataset_age, batch_size=8, shuffle=True)
+val_loader_age = DataLoader(val_dataset_age, batch_size=8, shuffle=False)
 
 # 성별 데이터셋 설정
 train_dataset_gender = CustomDataset(x_train_gender, y_train_gender, transform=train_transform)
 val_dataset_gender = CustomDataset(x_test_gender, y_test_gender, transform=val_transform)
 
-train_loader_gender = DataLoader(train_dataset_gender, batch_size=16, shuffle=True)
-val_loader_gender = DataLoader(val_dataset_gender, batch_size=16, shuffle=False)
+train_loader_gender = DataLoader(train_dataset_gender, batch_size=8, shuffle=True)
+val_loader_gender = DataLoader(val_dataset_gender, batch_size=8, shuffle=False)
 
 # 나이 예측용 (회귀) run_epoch 함수
 def run_epoch_age(loader, model, criterion, optimizer=None, is_train=True):
@@ -183,7 +183,7 @@ def run_epoch_gender(loader, model, criterion, optimizer=None, is_train=True):
             optimizer.zero_grad()
 
         outputs = model(images)
-        print(f"Outputs Shape: {outputs.shape}, Labels Shape: {labels.shape}")
+        # print(f"Outputs Shape: {outputs.shape}, Labels Shape: {labels.shape}")
 
         # 성별 예측 (분류 문제일 경우 CrossEntropy 사용)
         loss = criterion(outputs, labels)
