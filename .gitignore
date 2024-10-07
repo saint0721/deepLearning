@@ -25,3 +25,4 @@ pyvenv.cfg
 lib64
 */dataverser_files/
 skin-cancer-prediction/dataverse_files/
+.vscode/launch.json
