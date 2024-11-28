@@ -26,3 +26,26 @@ lib64
 */dataverser_files/
 skin-cancer-prediction/dataverse_files/
 .vscode/launch.json
+
+# .npy 파일 제외
+*.npy
+
+# Jupyter Notebook 체크포인트 파일 제외
+.ipynb_checkpoints/
+
+# log 디렉터리 제외
+log/
+dataset/log/
+
+# 특정 파일 제외
+main-checkpoint.ipynb
+
+# dataset/result 디렉터리 제외
+dataset/result/
+
+# dataset/untitled.txt 제외
+dataset/untitled.txt
+
+# drive 디렉터리 제외
+drive/
+dataset
