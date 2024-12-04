@@ -7,6 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.optim as optim
+from optimizer import get_optimizer
 from torchvision import transforms
 
 # 내가 만든 라이브러리
@@ -45,7 +46,8 @@ if os.path.isfile(f"./checkpoint/{file_name}"):
     model.load_state_dict(checkpoint["net"]) 
 
 # 최적화 & 손실함수 설정
-optimizer = optim.Adam(model.parameters(), lr=1e-3)
+optimizer_name = 'Adam'
+optimizer = get_optimizer(optimizer_name, model.parameters(), lr=learning_rate)
 criterion = nn.BCEWithLogitsLoss().to(device)
 
 # 폴더 지정 & 데이터로더 설정
@@ -108,7 +110,6 @@ def load(ckpt_dir, net, optim):
     return net, optim, epoch
 
 # 훈련 파라미터 설정하기
-lr = 1e-3
 batch_size = 4
 num_epoch = 20
 
@@ -127,7 +128,7 @@ val_loader = DataLoader(dataset_val, batch_size=batch_size, shuffle=False, num_w
 
 # Optimizer& 손실함수 정의하기
 criterion = nn.BCEWithLogitsLoss().to(device)
-optim = optim.Adam(model.parameters(), lr=lr)
+optim = optim.Adam(model.parameters(), lr=1e-3)
 
 # 그밖에 부수적인 variables 설정하기
 num_data_train = len(dataset_train)
