@@ -49,3 +49,7 @@ dataset/untitled.txt
 # drive 디렉터리 제외
 drive/
 dataset
+*.txt
+*.pt
+*.png
+*.jpg
