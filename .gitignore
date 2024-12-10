@@ -53,3 +53,8 @@ dataset
 *.pt
 *.png
 *.jpg
+*.tiff
+*.tif
+*/dataset/*
+*/Semantic_segmentation_dataset/*
+.npy
