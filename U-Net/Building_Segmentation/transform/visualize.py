@@ -34,4 +34,3 @@ def colour_code_segmentation(image, label_values):
 	x = colour_codes[image.astype(int)]
 
 	return x
-

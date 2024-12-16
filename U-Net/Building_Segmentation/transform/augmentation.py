@@ -2,8 +2,8 @@ import albumentations as album
 
 def get_training_augmentation():
 	train_transform = [
-		album.RandomCrop(height=256, width=256, always_apply=True),
-		album.OneOf(
+		album.RandomCrop(height=256, width=256, always_apply=True), # always apply는 항상 적용됨을 의미함.
+		album.OneOf( # OneOf == 셋 중 하나
 			[
 				album.HorizontalFlip(p=1),
 				album.VerticalFlip(p=1),

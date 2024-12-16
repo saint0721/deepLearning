@@ -10,7 +10,6 @@ warnings.filterwarnings('ignore')
 
 # 파이토치 라이브러리
 import torch
-from torchmetrics.classification import MulticlassPrecision, MulticlassRecall, MulticlassF1Score
 from optimizer import get_optimizer
 from torch.utils.data import DataLoader
 import segmentation_models_pytorch.utils
@@ -22,7 +21,7 @@ from model import initialize_model
 from get_data import get_class_label
 from visualize import visualize, reverse_one_hot, colour_code_segmentation
 from augmentation import get_training_augmentation, get_preprocessing, get_validation_augmentation
-from utils import crop_image
+from utils import crop_image, F1Score
 import wandb
 
 # wandb 초기화
@@ -51,11 +50,17 @@ if os.path.exists('/home/saint/deepLearning/U-Net/Building_Segmentation/best_mod
 
 # Metrics 정의
 criterion = smp.utils.losses.DiceLoss()
-metrics = [smp.utils.metrics.IoU(threshold=0.5)]
+metrics = [
+    smp.utils.metrics.IoU(threshold=0.5),
+    smp.utils.metrics.Precision(threshold=0.5),
+    smp.utils.metrics.Recall(threshold=0.5),
+    smp.utils.metrics.Accuracy(threshold=0.5),
+    F1Score(beta=1, eps=1e-7)
+]
 
 # Optimizer 설정
 optimizer_name = 'Adam'
-optimizer = get_optimizer(optimizer_name, model.parameters(), lr=0.00008)
+optimizer = get_optimizer(optimizer_name, model.parameters(), lr=0.0001)
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1, T_mult=2, eta_min=5e-5)
 
 # 폴더지정 & 데이터로더 설정
@@ -143,7 +148,7 @@ if Training:
   best_IoU_score = 0.0
   train_logs_list, valid_logs_list = [], []
 
-  for i in range(0, 3):
+  for i in range(0, 50):
     print(f'\nEpoch: {i+1}')
     train_logs = Train_epoch.run(train_loader)
     valid_logs = Valid_epoch.run(valid_loader)
@@ -158,25 +163,22 @@ if Training:
 end_time = time.time()
 
 print(f"CPU Time: {end_time-start_time:.2f} seconds")
-# wandb.log({
-#     "Epoch": i+1,
-#     "Epoch Time": end_time-start_time,
-#     "Train IoU": train_logs['iou_score'],
-#     "Valid IoU": valid_logs['iou_score'],
-#     "Train Dice Loss": train_logs['dice_loss'],
-#     "Valid Dice Loss": valid_logs['dice_loss'],
-# })
+wandb.log({
+    "best_IoU_score": best_IoU_score
+})
 
 # 테스트 
 test_dataset = BuildingsDataset(
-	x_test_dir, y_test_dir, augmentation=get_validation_augmentation(),
+	x_test_dir,y_test_dir,
+    augmentation=get_validation_augmentation(),
 	preprocessing=get_preprocessing(preprocessing_fn=None), 
 	class_rgb_values = select_class_rgb_values
 )
 test_dataloader = DataLoader(test_dataset)
 
 test_dataset_vis = BuildingsDataset(
-	x_test_dir, y_test_dir, augmentation=get_validation_augmentation(),
+	x_test_dir, y_test_dir, 
+    augmentation=get_validation_augmentation(),
 	class_rgb_values = select_class_rgb_values
 )
 
@@ -195,41 +197,29 @@ if not os.path.exists(sample_preds_folders):
 	os.makedirs(sample_preds_folders)
 
 for idx in range(len(test_dataset)):
+
     random_idx = random.randint(0, len(test_dataset)-1)
     image, gt_mask = test_dataset[random_idx]
     image_vis = crop_image(test_dataset_vis[random_idx][0].astype('uint8'))
-    
-    # 입력 텐서
-    x_tensor = torch.from_numpy(image).float().to(device).unsqueeze(0) # 배치 형태로 전환
-    gt_mask_tensor = torch.from_numpy(gt_mask).long().to(device)
-    if gt_mask_tensor.dim() == 4:
-        gt_mask_tensor = torch.argmax(gt_mask_tensor, dim=0)
-        gt_mask_tensor = gt_mask_tensor.unsqueeze(0)
-    print(f"Modified gt_mask_tensor shape: {gt_mask_tensor.shape}")
-
-    # 모델을 사용해 예측
-    with torch.no_grad():  # 평가 시 Grad 계산 비활성화
-        pred_logits = torch.softmax(model(x_tensor), dim=1)  # 확률 분포
-        pred_class = torch.argmax(pred_logits, dim=1) # 클래스 예측
-    
-    # CHW -> HWC로 변환
-    pred_mask = pred_logits.detach().squeeze().cpu().numpy()
-    pred_mask = np.transpose(pred_mask, (1, 2, 0)) # (H, W, C)
-
-    # 예측 결과 후처리
-    pred_building_heatmap = pred_mask[:, :, select_classes.index('building')]
+    x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
+    # Predict test image
+    pred_mask = model(x_tensor)
+    pred_mask = pred_mask.detach().squeeze().cpu().numpy()
+    # Convert pred_mask from `CHW` format to `HWC` format
+    pred_mask = np.transpose(pred_mask,(1,2,0))
+    # Get prediction channel corresponding to building
+    pred_building_heatmap = pred_mask[:,:,select_classes.index('building')]
     pred_mask = crop_image(colour_code_segmentation(reverse_one_hot(pred_mask), select_class_rgb_values))
-
-    # gt_mask 후처리
-    gt_mask = np.transpose(gt_mask, (1, 2, 0))
+    # Convert gt_mask from `CHW` format to `HWC` format
+    gt_mask = np.transpose(gt_mask,(1,2,0))
     gt_mask = crop_image(colour_code_segmentation(reverse_one_hot(gt_mask), select_class_rgb_values))
-    cv2.imwrite(os.path.join(sample_preds_folders, f"sample_pred_{idx}.png"), np.hstack([image_vis, gt_mask, pred_mask])[:, :, ::-1])
+    cv2.imwrite(os.path.join(sample_preds_folders, f"sample_pred_{idx}.png"), np.hstack([image_vis, gt_mask, pred_mask])[:,:,::-1])
     
     visualize(
-        original_image=image_vis,
-        ground_truth_mask=gt_mask,
-        predicted_mask=pred_mask,
-        predicted_building_heatmap=pred_building_heatmap
+        original_image = image_vis,
+        ground_truth_mask = gt_mask,
+        predicted_mask = pred_mask,
+        predicted_building_heatmap = pred_building_heatmap
     )
 
 # 데스트 결과 측정
@@ -243,21 +233,22 @@ test_epoch = smp.utils.train.ValidEpoch(
 
 valid_logs = test_epoch.run(test_dataloader)
 
-
 # 결과 출력
 print('evaluation os test data: ')
 print(f"Mean IoU Score: {valid_logs['iou_score']:.4f}")
 print(f"Mean Dice Loss: {valid_logs['dice_loss']:.4f}")
+
+
+# Wandb 로깅
+wandb.log({
+    "Mean IoU Score": valid_logs["iou_score"],
+    "Mean Dice Loss": valid_logs["dice_loss"],
+    "Confusion Matrix": wandb.Image("confusion_matrix.png")
+})
+
 # 결과 DataFrame 변환
 train_logs_df = pd.DataFrame(train_logs_list)
 valid_logs_df = pd.DataFrame(valid_logs_list)
-
-wandb.log({
-    "Dice Loss Plot": wandb.Image('dice_loss_plot.png'),
-    "Iou Score Plot": wandb.Image("iou_score_plt.png"),
-    "Train Logs": train_logs_df,
-    "Valid Logs": valid_logs_df,
-})
 
 # 학습 그래프 시각화
 plt.figure(figsize=(20, 8))
