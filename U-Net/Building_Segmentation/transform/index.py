@@ -1,9 +1,6 @@
 # 파이썬 라이브러리
 import os
-import random, tqdm
 import warnings
-import numpy as np
-import matplotlib.pyplot as plt
 import time
 warnings.filterwarnings('ignore')
 
@@ -17,7 +14,6 @@ from dataset import BuildingsDataset
 from get_data import get_class_label
 from augmentation import get_training_augmentation, get_preprocessing, get_validation_augmentation
 from utils import F1Score
-from train_eval import train_and_evaluate, predict_and_visualize
 from visualize import plot_metrics
 import wandb
 
@@ -86,8 +82,8 @@ optimizer = torch.optim.Adam([dict(params=model.parameters(), lr=0.0001)])
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1, T_mult=2, eta_min=5e-5)
 
 # 가중치 로드
-if os.path.exists('/home/saint/deepLearning/U-Net/Building_Segmentation/transform/best_model.pth'):
-    model.load_state_dict(torch.load('/home/saint/deepLearning/U-Net/Building_Segmentation/transform/best_model.pth', map_location=device))
+if os.path.exists('/home/saint/deepLearning/U-Net/Building_Segmentation/transform/best_model/best_model.pth'):
+    model.load_state_dict(torch.load('/home/saint/deepLearning/U-Net/Building_Segmentation/transform/best_model/best_model.pth', map_location=device))
     print("Model loaded successfully")
     
 # 데이터로더

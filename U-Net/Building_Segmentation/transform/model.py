@@ -1,8 +1,8 @@
 import torch
 from torchvision import models
 from torch import nn
-from UNet import UNet
-from ResNet import ResNet
+from Building_Segmentation.transform.model.UNet import UNet
+from Building_Segmentation.transform.model.ResNet import ResNet
 
 def set_parameter_requires_grad(model, feature_extracting):
     if feature_extracting:
