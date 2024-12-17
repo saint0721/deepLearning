@@ -1,6 +1,8 @@
 import torch
 import torch.nn as nn
 import segmentation_models_pytorch.utils as utils
+import cv2
+import numpy as np
 
 def crop_image(image, target_image_dims=[1500, 1500, 3]):
 	target_size = target_image_dims[0]
@@ -30,3 +32,12 @@ class F1Score(nn.Module):
         f1 = (1+self.beta**2) * precision * recall / (self.beta**2 * precision + recall + self.eps)
         
         return f1.mean()
+
+
+def count_buildings(mask):
+    _, binary_mask = cv2.threshold(mask, 0.5, 1, cv2.THRESH_BINARY)
+    num_labels, _, _, _ = cv2.connectedComponentsWithStats(binary_mask.astype(np.uint8), connectivity=4)
+    num_buildings = num_labels - 1
+
+    return num_buildings
+

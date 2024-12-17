@@ -1,27 +1,24 @@
 # 파이썬 라이브러리
-import os, cv2
+import os
 import random, tqdm
 import warnings
 import numpy as np
-import pandas as pd
 import matplotlib.pyplot as plt
 import time
 warnings.filterwarnings('ignore')
 
 # 파이토치 라이브러리
 import torch
-from optimizer import get_optimizer
 from torch.utils.data import DataLoader
-import segmentation_models_pytorch.utils
 import segmentation_models_pytorch as smp
 
 # 내가 만든 라이브러리
 from dataset import BuildingsDataset
-from model import initialize_model
 from get_data import get_class_label
-from visualize import visualize, reverse_one_hot, colour_code_segmentation
 from augmentation import get_training_augmentation, get_preprocessing, get_validation_augmentation
-from utils import crop_image, F1Score
+from utils import F1Score
+from train_eval import train_and_evaluate, predict_and_visualize
+from visualize import plot_metrics
 import wandb
 
 # wandb 초기화
@@ -31,25 +28,51 @@ wandb.init(
         "learning_rate": 1e-3,
         "architecture": "U-Net",
         "dataset": "Massachussetts Building",
-        "epochs": 12,
+        "epochs": 50,
     },
 )
 wandb.run.name = "U-Net Building Segmentation"
 
-# Device & 모델 설정 
-Training = True
-model_ft, input_size, model_name = initialize_model("UNet", num_classes=3, feature_extract=False, use_pretrained=False)
-device = "cuda" if torch.cuda.is_available() else "cpu"    
-model = model_ft.to(device)
-print(f"start: {model_name}")
+# 폴더지정 & 데이터로더 설정
+dir_data = "/home/saint/deepLearning/U-Net/Building_Segmentation/massachusetts-buildings-dataset/tiff"
+x_train_dir = os.path.join(dir_data, 'train')
+y_train_dir = os.path.join(dir_data, 'train_labels')
+x_valid_dir = os.path.join(dir_data, 'val')
+y_valid_dir = os.path.join(dir_data, 'val_labels')
+x_test_dir = os.path.join(dir_data, 'test')
+y_test_dir = os.path.join(dir_data, 'test_labels')
 
-# 가중치 로드
-if os.path.exists('/home/saint/deepLearning/U-Net/Building_Segmentation/best_model.pth'):
-    model.load_state_dict(torch.load('/home/saint/deepLearning/U-Net/Building_Segmentation/best_model.pth', map_location=device))
-    print("Model loaded successfully")
+# 클래스 라벨 불러오기
+select_class_rgb_values, select_classes = get_class_label("/home/saint/deepLearning/U-Net/Building_Segmentation/massachusetts-buildings-dataset/label_class_dict.csv")
+
+# 데이터 증강 & 시각화
+augmented_dataset = BuildingsDataset(
+    x_train_dir, y_train_dir, augmentation=get_training_augmentation(), class_rgb_values=select_class_rgb_values
+)
+
+# 모델 설정
+device = "cuda" if torch.cuda.is_available() else "cpu"  
+Training = True
+epochs = 50
+
+encoder = 'resnet50'
+encoder_weights = 'imagenet'
+classes = select_classes
+activation = 'sigmoid'
+
+model = smp.Unet(
+    encoder_name=encoder,
+    encoder_weights=encoder_weights,
+    classes=len(classes),
+    activation=activation
+)
+print(f"start: {model}")
+
+# 전처리 함수
+preprocessing_fn = smp.encoders.get_preprocessing_fn(encoder, encoder_weights)   
 
 # Metrics 정의
-criterion = smp.utils.losses.DiceLoss()
+loss = smp.utils.losses.DiceLoss()
 metrics = [
     smp.utils.metrics.IoU(threshold=0.5),
     smp.utils.metrics.Precision(threshold=0.5),
@@ -58,73 +81,40 @@ metrics = [
     F1Score(beta=1, eps=1e-7)
 ]
 
-# Optimizer 설정
-optimizer_name = 'Adam'
-optimizer = get_optimizer(optimizer_name, model.parameters(), lr=0.0001)
+# Optimizer & Scheduler 설정
+optimizer = torch.optim.Adam([dict(params=model.parameters(), lr=0.0001)])
 lr_scheduler = torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1, T_mult=2, eta_min=5e-5)
 
-# 폴더지정 & 데이터로더 설정
-dir_data = "/home/saint/deepLearning/U-Net/Building_Segmentation/massachusetts-buildings-dataset/tiff"
-# 학습 데이터
-x_train_dir = os.path.join(dir_data, 'train')
-y_train_dir = os.path.join(dir_data, 'train_labels')
-
-# 검증 데이터
-x_valid_dir = os.path.join(dir_data, 'val')
-y_valid_dir = os.path.join(dir_data, 'val_labels')
-
-# 테스트 데이터
-x_test_dir = os.path.join(dir_data, 'test')
-y_test_dir = os.path.join(dir_data, 'test_labels')
-select_class_rgb_values, select_classes = get_class_label("/home/saint/deepLearning/U-Net/Building_Segmentation/massachusetts-buildings-dataset/label_class_dict.csv")
-
-# 데이터셋에서 샘플 가져오기
-dataset = BuildingsDataset(x_train_dir, y_train_dir, class_rgb_values=select_class_rgb_values)
-
-# 랜덤 샘플 선택
-random_idx = random.randint(0, len(dataset) - 1)
-image, mask = dataset[random_idx]  
-
-# 랜덤 인덱스 시각화
-visualize(
-    original_image=image,
-    ground_truth_image=colour_code_segmentation(reverse_one_hot(mask), select_class_rgb_values),
-    one_hot_encoded_mask=reverse_one_hot(mask)
-)
-
-# 데이터 증강 & 시각화
-augmented_dataset = BuildingsDataset(
-    x_train_dir, y_train_dir, augmentation=get_training_augmentation(), class_rgb_values=select_class_rgb_values
-)
-random_idx = random.randint(0, len(augmented_dataset)-1)
-
-for i in range(3):
-    image, mask = augmented_dataset[random_idx]
-    visualize(
-    original_image=image,
-    ground_truth_image=colour_code_segmentation(reverse_one_hot(mask), select_class_rgb_values),
-    one_hot_encoded_mask=reverse_one_hot(mask)
-)
-
+# 가중치 로드
+if os.path.exists('/home/saint/deepLearning/U-Net/Building_Segmentation/transform/best_model.pth'):
+    model.load_state_dict(torch.load('/home/saint/deepLearning/U-Net/Building_Segmentation/transform/best_model.pth', map_location=device))
+    print("Model loaded successfully")
+    
 # 데이터로더
 train_dataset = BuildingsDataset(
     x_train_dir, y_train_dir, augmentation=get_training_augmentation(),
-    preprocessing=get_preprocessing(preprocessing_fn=None),
+    preprocessing=get_preprocessing(preprocessing_fn),
     class_rgb_values=select_class_rgb_values
 )
 valid_dataset = BuildingsDataset(
 	x_valid_dir, y_valid_dir, augmentation=get_validation_augmentation(),
-	preprocessing=get_preprocessing(preprocessing_fn=None),
+	preprocessing=get_preprocessing(preprocessing_fn),
+	class_rgb_values = select_class_rgb_values
+)
+test_dataset = BuildingsDataset(
+	x_valid_dir, y_valid_dir, augmentation=get_validation_augmentation(),
+	preprocessing=get_preprocessing(preprocessing_fn),
 	class_rgb_values = select_class_rgb_values
 )
 
 train_loader = DataLoader(train_dataset, batch_size=16, shuffle=True)
 valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False)
+test_loader = DataLoader(test_dataset, batch_size=1, shuffle=False)
 
-# 학습 설정
+# 훈련
 Train_epoch = smp.utils.train.TrainEpoch(
     model, 
-    loss=criterion, 
+    loss=loss, 
     metrics=metrics, 
     optimizer=optimizer,
     device=device,
@@ -134,7 +124,7 @@ Train_epoch = smp.utils.train.TrainEpoch(
 # 검증
 Valid_epoch = smp.utils.train.ValidEpoch(
     model, 
-    loss=criterion, 
+    loss=loss, 
     metrics=metrics, 
     device=device,
     verbose=True,
@@ -143,12 +133,12 @@ Valid_epoch = smp.utils.train.ValidEpoch(
 # CPU Time 측정
 start_time = time.time()
 
-# 훈련 시작
+# 학습 진행
 if Training:
   best_IoU_score = 0.0
   train_logs_list, valid_logs_list = [], []
 
-  for i in range(0, 50):
+  for i in range(0, epochs):
     print(f'\nEpoch: {i+1}')
     train_logs = Train_epoch.run(train_loader)
     valid_logs = Valid_epoch.run(valid_loader)
@@ -157,119 +147,142 @@ if Training:
 
     if best_IoU_score < valid_logs['iou_score']:
         best_IoU_score = valid_logs['iou_score']
-        torch.save(model.state_dict(), '/home/saint/deepLearning/U-Net/Building_Segmentation/best_model.pth')
+        torch.save(model.state_dict(), './best_model.pth')
         print('Model saved!')
 
 end_time = time.time()
-
 print(f"CPU Time: {end_time-start_time:.2f} seconds")
-wandb.log({
-    "best_IoU_score": best_IoU_score
-})
 
-# 테스트 
 test_dataset = BuildingsDataset(
-	x_test_dir,y_test_dir,
+    x_test_dir, y_test_dir, 
     augmentation=get_validation_augmentation(),
-	preprocessing=get_preprocessing(preprocessing_fn=None), 
-	class_rgb_values = select_class_rgb_values
+    preprocessing=get_preprocessing(preprocessing_fn),
+    class_rgb_values=select_class_rgb_values
 )
-test_dataloader = DataLoader(test_dataset)
-
-test_dataset_vis = BuildingsDataset(
-	x_test_dir, y_test_dir, 
-    augmentation=get_validation_augmentation(),
-	class_rgb_values = select_class_rgb_values
-)
-
-random_idx = random.randint(0, len(test_dataset_vis)-1)
-image, mask = test_dataset_vis[random_idx]
-
-visualize(
-	original_image = image, 
-	ground_truth_mask = colour_code_segmentation(reverse_one_hot(mask), select_class_rgb_values),
-	one_hot_encoded_mask = reverse_one_hot(mask)
-)
+test_loader = DataLoader(test_dataset)
 
 # 예측 결과 저장할 폴더 생성
 sample_preds_folders = 'sample_predictions/'
 if not os.path.exists(sample_preds_folders):
 	os.makedirs(sample_preds_folders)
+ 
+models = {
+    "U-Net": smp.Unet(encoder_name='resnet50', encoder_weights='imagenet', classes=len(classes), activation=activation),
+    "U-Net++": smp.UnetPlusPlus(encoder_name='resnet50', encoder_weights='imagenet', classes=len(classes), activation=activation),
+    "DeepLabV3": smp.DeepLabV3(encoder_name='resnet50', encoder_weights='imagenet', classes=len(classes), activation=activation),
+    "FPN": smp.FPN(encoder_name='resnet50', encoder_weights='imagenet', classes=len(classes), activation=activation),
+}
 
-for idx in range(len(test_dataset)):
+train_epochs = {}
+valid_epochs = {}
 
-    random_idx = random.randint(0, len(test_dataset)-1)
-    image, gt_mask = test_dataset[random_idx]
-    image_vis = crop_image(test_dataset_vis[random_idx][0].astype('uint8'))
-    x_tensor = torch.from_numpy(image).to(device).unsqueeze(0)
-    # Predict test image
-    pred_mask = model(x_tensor)
-    pred_mask = pred_mask.detach().squeeze().cpu().numpy()
-    # Convert pred_mask from `CHW` format to `HWC` format
-    pred_mask = np.transpose(pred_mask,(1,2,0))
-    # Get prediction channel corresponding to building
-    pred_building_heatmap = pred_mask[:,:,select_classes.index('building')]
-    pred_mask = crop_image(colour_code_segmentation(reverse_one_hot(pred_mask), select_class_rgb_values))
-    # Convert gt_mask from `CHW` format to `HWC` format
-    gt_mask = np.transpose(gt_mask,(1,2,0))
-    gt_mask = crop_image(colour_code_segmentation(reverse_one_hot(gt_mask), select_class_rgb_values))
-    cv2.imwrite(os.path.join(sample_preds_folders, f"sample_pred_{idx}.png"), np.hstack([image_vis, gt_mask, pred_mask])[:,:,::-1])
-    
-    visualize(
-        original_image = image_vis,
-        ground_truth_mask = gt_mask,
-        predicted_mask = pred_mask,
-        predicted_building_heatmap = pred_building_heatmap
+# Define the optimizers for each model
+optimizers = {
+    name: torch.optim.Adam(model.parameters(), lr=0.0001) for name, model in models.items()
+}
+
+# Define the learning rate schedulers (not used in this example)
+lr_schedulers = {
+    name: torch.optim.lr_scheduler.CosineAnnealingWarmRestarts(optimizer, T_0=1, T_mult=2, eta_min=5e-5) for name, optimizer in optimizers.items()
+}
+
+# Define the metrics for each model
+metrics = {
+    name: [
+        smp.utils.metrics.IoU(threshold=0.5),
+        smp.utils.metrics.Precision(threshold=0.5),
+        smp.utils.metrics.Recall(threshold=0.5),
+        smp.utils.metrics.Accuracy(threshold=0.5),
+        F1Score(beta=1, eps=1e-7)
+    ] for name in models.keys()
+}
+
+# Define the loss function for each model
+losses = {
+    name: smp.utils.losses.DiceLoss() for name in models.keys()
+}
+
+# Initialize the train and validation logs for each model
+train_logs_list = {name: [] for name in models.keys()}
+valid_logs_list = {name: [] for name in models.keys()}
+
+# Train and validate each model
+for name, model in models.items():
+    model = model.to(device)
+    train_epochs[name] = smp.utils.train.TrainEpoch(
+        model,
+        loss=losses[name],
+        metrics=metrics[name],
+        optimizer=optimizers[name],
+        device=device,
+        verbose=True,
+    )
+    valid_epochs[name] = smp.utils.train.ValidEpoch(
+        model,
+        loss=losses[name],
+        metrics=metrics[name],
+        device=device,
+        verbose=True,
     )
 
-# 데스트 결과 측정
-test_epoch = smp.utils.train.ValidEpoch(
-	model,
-	loss=criterion,
-	metrics=metrics,
-	device=device,
-	verbose=True
-)
+    if Training:
+        best_iou_score = 0.0
+        for i in range(0, epochs):
+            print(f'\n{name} - Epoch: {i+1}')
+            train_logs = train_epochs[name].run(train_loader)
+            valid_logs = valid_epochs[name].run(valid_loader)
+            train_logs_list[name].append(train_logs)
+            valid_logs_list[name].append(valid_logs)
 
-valid_logs = test_epoch.run(test_dataloader)
+            # Save model if a better val IoU score is obtained
+            if best_iou_score < valid_logs['iou_score']:
+                best_iou_score = valid_logs['iou_score']
+                torch.save(model, f'{name}_best_model.pth')
+                print('Model saved!')
 
-# 결과 출력
-print('evaluation os test data: ')
-print(f"Mean IoU Score: {valid_logs['iou_score']:.4f}")
-print(f"Mean Dice Loss: {valid_logs['dice_loss']:.4f}")
+# Evaluate each model on the test set
+for name, model in models.items():
+    best_model = torch.load(f'{name}_best_model.pth', map_location=device)
+    test_epoch = smp.utils.train.ValidEpoch(
+        best_model,
+        loss=losses[name],
+        metrics=metrics[name],
+        device=device,
+        verbose=True,
+    )
+    valid_logs = test_epoch.run(test_loader)
+    print(f"\nEvaluation on Test Data for {name}: ")
+    print(f"Mean F1 Score: {valid_logs['F1Score']:.4f}")
+    print(f"Mean IoU Score: {valid_logs['iou_score']:.4f}")
+    print(f"Mean Dice Loss: {valid_logs['dice_loss']:.4f}")
+    print(f"Mean Precision: {valid_logs['precision']:.4f}")
+    print(f"Mean Accuracy: {valid_logs['accuracy']:.4f}")
+    print(f"Mean Recall: {valid_logs['recall']:.4f}")    
+    
+# Evaluate each model on the test set and plot the metrics
+for name, model in models.items():
+    best_model = torch.load(f'{name}_best_model.pth', map_location=device)
+    test_epoch = smp.utils.train.ValidEpoch(
+        best_model,
+        loss=losses[name],
+        metrics=metrics[name],
+        device=device,
+        verbose=True,
+    )
+    valid_logs = test_epoch.run(test_loader)
+    print(f"\nEvaluation on Test Data for {name}: ")
+    for metric, value in valid_logs.items():
+        print(f"Mean {metric}: {value:.4f}")
+    
+    # Plot the metrics for the current model
+    plot_metrics(name, train_logs_list[name], valid_logs_list[name], valid_logs.keys())
 
-
-# Wandb 로깅
+# Log Wandb
 wandb.log({
-    "Mean IoU Score": valid_logs["iou_score"],
-    "Mean Dice Loss": valid_logs["dice_loss"],
-    "Confusion Matrix": wandb.Image("confusion_matrix.png")
+    "Mean F1 Score": round(valid_logs['F1Score'], 4),
+    "Mean IoU Score": round(valid_logs['iou_score'], 4),
+    "Mean Dice Loss": round(valid_logs['dice_loss'], 4),
+    "Mean Precision": round(valid_logs['precision'], 4),
+    "Mean Accuracy": round(valid_logs['accuracy'], 4),
+    "Mean Recall": round(valid_logs['recall'], 4)
 })
-
-# 결과 DataFrame 변환
-train_logs_df = pd.DataFrame(train_logs_list)
-valid_logs_df = pd.DataFrame(valid_logs_list)
-
-# 학습 그래프 시각화
-plt.figure(figsize=(20, 8))
-plt.plot(train_logs_df.index.tolist(), train_logs_df.iou_score.tolist(), lw=3, label='Train')
-plt.plot(valid_logs_df.index.tolist(), valid_logs_df.iou_score.tolist(), lw=3, label="Valid")
-
-plt.xlabel('Epochs', fontsize=21)
-plt.ylabel('IoU Score', fontsize=21)
-plt.title('IoU Score Plot', fontsize=21)
-plt.legend(loc='best', fontsize=16)
-plt.grid()
-plt.savefig('iou_score_plt.png')
-plt.show()
-
-plt.figure(figsize=(20,8))
-plt.plot(train_logs_df.index.tolist(), train_logs_df.dice_loss.tolist(), lw=3, label = 'Train')
-plt.plot(valid_logs_df.index.tolist(), valid_logs_df.dice_loss.tolist(), lw=3, label = 'Valid')
-plt.xlabel('Epochs', fontsize=21)
-plt.ylabel('Dice Loss', fontsize=21)
-plt.title('Dice Loss Plot', fontsize=21)
-plt.legend(loc='best', fontsize=16)
-plt.grid()
-plt.savefig('dice_loss_plot.png')
-plt.show()
