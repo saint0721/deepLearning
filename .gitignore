@@ -1,4 +1,4 @@
-# 무시할 파일 및 폴더 목록
+.gitignordai .git# 무시할 파일 및 폴더 목록
 wandb
 __pycache__/
 *.pyc
@@ -59,3 +59,5 @@ dataset
 */Semantic_segmentation_dataset/*
 .npy
 .
+
+*.json
