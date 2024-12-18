@@ -39,6 +39,8 @@ x_test_dir = os.path.join(dir_data, 'test')
 y_test_dir = os.path.join(dir_data, 'test_labels')
 
 # 클래스 라벨 불러오기
+
+# 클래스 라벨 불러오기
 select_class_rgb_values, select_classes = get_class_label("/home/saint/deepLearning/U-Net/Building_Segmentation/massachusetts-buildings-dataset/label_class_dict.csv")
 
 # 데이터 증강 & 시각화
